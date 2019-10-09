@@ -17,10 +17,28 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	configDirFmt = "/sys/kernel/config/target/core/user_%d"
-	scsiDir      = "/sys/kernel/config/target/loopback"
+var (
+	devfs = "/dev"
+	sysfs = "/sys"
 )
+
+var configDirFmt string
+var scsiDir string
+
+func init() {
+	dpath := os.Getenv("DEVFS")
+	if dpath != "" {
+		devfs = dpath
+	}
+
+	spath := os.Getenv("SYSFS")
+	if spath != "" {
+		sysfs = spath
+	}
+
+	configDirFmt = sysfs + "/kernel/config/target/core/user_%d"
+	scsiDir = sysfs + "/kernel/config/target/loopback"
+}
 
 type Device struct {
 	scsi    *SCSIHandler
@@ -159,7 +177,7 @@ func (d *Device) createDevEntry() error {
 
 	found := false
 	matches := []string{}
-	path := fmt.Sprintf("/sys/bus/scsi/devices/%s*/block/*/dev", strings.TrimSpace(string(address)))
+	path := fmt.Sprintf("%s/bus/scsi/devices/%s*/block/*/dev", sysfs, strings.TrimSpace(string(address)))
 	for i := 0; i < 30; i++ {
 		var err error
 		matches, err = filepath.Glob(path)
@@ -252,17 +270,17 @@ func (d *Device) start() (err error) {
 }
 
 func (d *Device) findDevice() error {
-	err := filepath.Walk("/dev", func(path string, i os.FileInfo, err error) error {
+	err := filepath.Walk(devfs, func(path string, i os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if i.IsDir() && path != "/dev" {
+		if i.IsDir() && path != devfs {
 			return filepath.SkipDir
 		}
 		if !strings.HasPrefix(i.Name(), "uio") {
 			return nil
 		}
-		sysfile := fmt.Sprintf("/sys/class/uio/%s/name", i.Name())
+		sysfile := fmt.Sprintf("%s/class/uio/%s/name", sysfs, i.Name())
 		bytes, err := ioutil.ReadFile(sysfile)
 		if err != nil {
 			return err
@@ -294,13 +312,12 @@ func (d *Device) openDevice(user string, vol string, uio string) error {
 	var uioFd int
 	var err error
 	d.deviceName = vol
-
-	fname := fmt.Sprintf("/dev/%s", uio)
+	fname := fmt.Sprintf("%s/%s", devfs, uio)
 	uioFd, err = syscall.Open(fname, syscall.O_RDWR|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0600)
 	if err != nil {
 		return err
 	}
-	bytes, err := ioutil.ReadFile(fmt.Sprintf("/sys/class/uio/%s/maps/map0/size", uio))
+	bytes, err := ioutil.ReadFile(fmt.Sprintf("%s/class/uio/%s/maps/map0/size", sysfs, uio))
 	if err != nil {
 		return err
 	}
