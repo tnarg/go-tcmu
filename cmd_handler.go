@@ -5,8 +5,9 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/coreos/go-tcmu/scsi"
 	"github.com/prometheus/common/log"
+
+	"github.com/tnarg/go-tcmu/scsi"
 )
 
 // SCSICmdHandler is a simple request/response handler for SCSI commands coming to TCMU.

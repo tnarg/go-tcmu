@@ -3,9 +3,10 @@ package tcmu
 import (
 	"fmt"
 
-	"github.com/coreos/go-tcmu/scsi"
 	"github.com/prometheus/common/log"
 	"golang.org/x/sys/unix"
+
+	"github.com/tnarg/go-tcmu/scsi"
 )
 
 const (

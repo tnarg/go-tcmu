@@ -5,8 +5,9 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/coreos/go-tcmu"
 	"github.com/sirupsen/logrus"
+
+	"github.com/tnarg/go-tcmu"
 )
 
 func main() {

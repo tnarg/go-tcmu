@@ -9,8 +9,9 @@ import (
 	"io"
 	"sync"
 
-	"github.com/coreos/go-tcmu/scsi"
 	"github.com/prometheus/common/log"
+
+	"github.com/tnarg/go-tcmu/scsi"
 )
 
 // SCSICmd represents a single SCSI command recieved from the kernel to the virtual target.

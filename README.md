@@ -1,5 +1,5 @@
 # go-tcmu
-[![GoDoc](https://godoc.org/github.com/coreos/go-tcmu?status.svg)](https://godoc.org/github.com/coreos/go-tcmu)
+[![GoDoc](https://godoc.org/github.com/tnarg/go-tcmu?status.svg)](https://godoc.org/github.com/tnarg/go-tcmu)
 ---
 
 Go bindings to attach Go `Reader`s and `Writer`s to the Linux kernel via SCSI.
