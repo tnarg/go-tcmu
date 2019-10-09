@@ -105,12 +105,13 @@ func EmulateEvpdInquiry(cmd *SCSICmd, inq *InquiryInfo) (SCSIResponse, error) {
 	switch vpdType {
 	case 0x0: // Supported VPD pages
 		// The absolute minimum.
-		data := make([]byte, 6)
+		data := make([]byte, 7)
 
-		// We support 0x00 and 0x83 only
-		data[3] = 2
+		// We support 0x00, 0x83, and 0xB0 only
+		data[3] = 3
 		data[4] = 0x00
 		data[5] = 0x83
+		data[6] = 0xB0
 
 		cmd.Write(data)
 		return cmd.Ok(), nil
@@ -178,6 +179,37 @@ func EmulateEvpdInquiry(cmd *SCSICmd, inq *InquiryInfo) (SCSIResponse, error) {
 		order.PutUint16(data[2:4], uint16(used-4))
 
 		cmd.Write(data[:used])
+		return cmd.Ok(), nil
+	case 0xB0:
+		// The Block Limits VPD page provides the application client
+		// with the means to obtain certain operating parameters of
+		// the logical unit.
+
+		data := make([]byte, 16)
+		data[1] = 0xB0
+		data[3] = 0x0C
+
+		order := binary.BigEndian
+
+		// The OPTIMAL TRANSFER LENGTH GRANULARITY field indicates the
+		// optimal transfer length granularity in blocks for a single
+		// I/O command. Transfers with transfer lengths not equal to a
+		// multiple of this value may incur significant delays in
+		// processing.
+		order.PutUint16(data[6:8], cmd.Device().Sizes().BlockXferMin)
+
+		// The MAXIMUM TRANSFER LENGTH field indicates the maximum
+		// transfer length in blocks that the device server accepts
+		// for a single I/O command.
+		order.PutUint32(data[8:12], cmd.Device().Sizes().BlockXferMax)
+
+		// The OPTIMAL TRANSFER LENGTH field indicates the optimal
+		// transfer length in blocks for a single I/O
+		// command. Transfers with transfer lengths exceeding this
+		// value may incur significant delays in processing.
+		order.PutUint32(data[12:16], cmd.Device().Sizes().BlockXferOpt)
+
+		cmd.Write(data)
 		return cmd.Ok(), nil
 	default:
 		return cmd.IllegalRequest(), nil

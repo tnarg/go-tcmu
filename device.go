@@ -96,6 +96,8 @@ func (d *Device) preEnableTcmu() error {
 		fmt.Sprintf("dev_size=%d", d.scsi.DataSizes.VolumeSize),
 		fmt.Sprintf("dev_config=%s", d.GetDevConfig()),
 		fmt.Sprintf("hw_block_size=%d", d.scsi.DataSizes.BlockSize),
+		fmt.Sprintf("hw_max_sectors=%d", (int64(d.scsi.DataSizes.BlockXferMax)*d.scsi.DataSizes.BlockSize)/1024),
+		fmt.Sprintf("max_data_area_mb=%d", 2048),
 		"async=1",
 	})
 	if err != nil {

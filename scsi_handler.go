@@ -244,8 +244,11 @@ type SCSIHandler struct {
 type DevReadyFunc func(chan *SCSICmd, chan SCSIResponse) error
 
 type DataSizes struct {
-	VolumeSize int64
-	BlockSize  int64
+	VolumeSize   int64
+	BlockSize    int64
+	BlockXferMin uint16
+	BlockXferMax uint32
+	BlockXferOpt uint32
 }
 
 // NaaWWN represents the World Wide Name of the SCSI device we are emulating, using the
@@ -317,7 +320,13 @@ func BasicSCSIHandler(rw ReadWriterAt) *SCSIHandler {
 		WWN:        GenerateTestWWN(),
 		VolumeName: "testvol",
 		// 1GiB, 1K
-		DataSizes: DataSizes{1024 * 1024 * 1024, 1024},
+		DataSizes: DataSizes{
+			VolumeSize:   1024 * 1024 * 1024,
+			BlockSize:    1024,
+			BlockXferMin: 1,
+			BlockXferMax: 1024 * 1024,
+			BlockXferOpt: 1024,
+		},
 		DevReady: MultiThreadedDevReady(
 			ReadWriterAtCmdHandler{
 				RW: rw,
