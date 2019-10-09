@@ -114,6 +114,25 @@ func (c *SCSICmd) Write(b []byte) (n int, err error) {
 	return boff, nil
 }
 
+// ReadFrom, for a SCSICmd, fills the commands kernel buffers from a io.Reader.
+func (c *SCSICmd) ReadFrom(r io.Reader) (n int64, err error) {
+	for c.vecoffset < len(c.vecs) {
+		var nn int
+		nn, err = r.Read(c.vecs[c.vecoffset][c.offset:])
+		n += int64(nn)
+		if err != nil {
+			return
+		}
+		c.offset += nn
+		if c.offset == len(c.vecs[c.vecoffset]) {
+			c.vecoffset++
+			c.offset = 0
+		}
+	}
+
+	return
+}
+
 // Read, for a SCSICmd, is a io.Reader from the data buffer attached to this SCSI command.
 // If there's data to be written to the virtual device, this is the way to access it.
 func (c *SCSICmd) Read(b []byte) (n int, err error) {

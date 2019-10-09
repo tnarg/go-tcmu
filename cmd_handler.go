@@ -353,31 +353,14 @@ func EmulateModeSelect(cmd *SCSICmd, wce bool) (SCSIResponse, error) {
 }
 
 func EmulateRead(cmd *SCSICmd, r io.ReaderAt) (SCSIResponse, error) {
-	offset := cmd.LBA() * uint64(cmd.Device().Sizes().BlockSize)
-	length := int(cmd.XferLen() * uint32(cmd.Device().Sizes().BlockSize))
-	if cmd.Buf == nil {
-		cmd.Buf = make([]byte, length)
-	}
-	if len(cmd.Buf) < int(length) {
-		//realloc
-		cmd.Buf = make([]byte, length)
-	}
-	n, err := r.ReadAt(cmd.Buf[:length], int64(offset))
-	if n < length {
-		zap.L().Error("read/read failed: unable to copy enough")
-		return cmd.MediumError(), nil
-	}
-	if err != nil {
-		zap.L().Error("read/read failed", zap.Error(err))
-		return cmd.MediumError(), nil
-	}
-	n, err = cmd.Write(cmd.Buf[:length])
-	if n < length {
-		zap.L().Error("read/write failed: unable to copy enough")
-		return cmd.MediumError(), nil
-	}
-	if err != nil {
-		zap.L().Error("read/write failed", zap.Error(err))
+	offset := int64(cmd.LBA() * uint64(cmd.Device().Sizes().BlockSize))
+	length := int64(cmd.XferLen() * uint32(cmd.Device().Sizes().BlockSize))
+
+	sr := io.NewSectionReader(r, offset, length)
+
+	n, err := io.CopyBuffer(cmd, sr, cmd.Buf)
+	if err != nil || n < length {
+		zap.L().Error("read/read failed", zap.Error(err), zap.Int64("wanted", length), zap.Int64("wrote", n))
 		return cmd.MediumError(), nil
 	}
 	return cmd.Ok(), nil
