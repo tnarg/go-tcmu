@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"go.uber.org/zap"
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -29,7 +29,9 @@ type Device struct {
 	hbaDir     string
 	deviceName string
 
-	uioFd    int
+	uiof     *os.File
+	pollDone chan struct{}
+	pollers  *sync.WaitGroup
 	mapsize  uint64
 	mmap     []byte
 	cmdChan  chan *SCSICmd
@@ -56,10 +58,11 @@ func (d *Device) Sizes() DataSizes {
 // The returned Device represents the open device connection to the kernel, and must be closed.
 func OpenTCMUDevice(devPath string, scsi *SCSIHandler) (*Device, error) {
 	d := &Device{
-		scsi:    scsi,
-		devPath: devPath,
-		uioFd:   -1,
-		hbaDir:  fmt.Sprintf(configDirFmt, scsi.HBA),
+		scsi:     scsi,
+		devPath:  devPath,
+		pollDone: make(chan struct{}),
+		pollers:  &sync.WaitGroup{},
+		hbaDir:   fmt.Sprintf(configDirFmt, scsi.HBA),
 	}
 	err := d.Close()
 	if err != nil {
@@ -80,8 +83,10 @@ func (d *Device) Close() error {
 	if err != nil {
 		return err
 	}
-	if d.uioFd != -1 {
-		unix.Close(d.uioFd)
+	if d.uiof != nil {
+		close(d.pollDone)
+		d.pollers.Wait()
+		d.uiof.Close()
 	}
 	return nil
 }
@@ -238,6 +243,7 @@ func (d *Device) start() (err error) {
 	}
 	d.cmdChan = make(chan *SCSICmd, 5)
 	d.respChan = make(chan SCSIResponse, 5)
+	d.pollers.Add(1)
 	go d.beginPoll()
 	d.scsi.DevReady(d.cmdChan, d.respChan)
 	return
@@ -283,10 +289,12 @@ func (d *Device) findDevice() error {
 }
 
 func (d *Device) openDevice(user string, vol string, uio string) error {
+	var uioFd int
 	var err error
 	d.deviceName = vol
-	//d.uioFd, err = syscall.Open(fmt.Sprintf("/dev/%s", uio), syscall.O_RDWR|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0600)
-	d.uioFd, err = syscall.Open(fmt.Sprintf("/dev/%s", uio), syscall.O_RDWR|syscall.O_CLOEXEC, 0600)
+
+	fname := fmt.Sprintf("/dev/%s", uio)
+	uioFd, err = syscall.Open(fname, syscall.O_RDWR|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0600)
 	if err != nil {
 		return err
 	}
@@ -298,7 +306,8 @@ func (d *Device) openDevice(user string, vol string, uio string) error {
 	if err != nil {
 		return err
 	}
-	d.mmap, err = syscall.Mmap(d.uioFd, 0, int(d.mapsize), syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
+	d.uiof = os.NewFile(uintptr(uioFd), fname)
+	d.mmap, err = syscall.Mmap(uioFd, 0, int(d.mapsize), syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
 	d.cmdTail = d.mbCmdTail()
 	d.debugPrintMb()
 	return err

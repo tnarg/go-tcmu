@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
-	"golang.org/x/sys/unix"
 
 	"github.com/tnarg/go-tcmu/scsi"
 )
@@ -14,17 +13,31 @@ const (
 )
 
 func (d *Device) beginPoll() {
+	defer d.pollers.Done()
 	// Entry point for the goroutine.
 	go d.recvResponse()
 	buf := make([]byte, 4)
+	result := make(chan error)
 	for {
-		var n int
-		var err error
-		n, err = unix.Read(d.uioFd, buf)
-		if n == -1 && err != nil {
-			fmt.Println(err)
-			break
+		go func() {
+			_, err := d.uiof.Read(buf)
+			select {
+			case result <- err:
+			case <-d.pollDone:
+				return
+			}
+		}()
+
+		select {
+		case err := <-result:
+			if err != nil {
+				zap.L().Error("read error", zap.Error(err))
+				goto termLoop
+			}
+		case <-d.pollDone:
+			goto termLoop
 		}
+
 		for {
 			cmd, err := d.getNextCommand()
 			if err != nil {
@@ -37,6 +50,7 @@ func (d *Device) beginPoll() {
 			d.cmdChan <- cmd
 		}
 	}
+termLoop:
 	close(d.cmdChan)
 }
 
@@ -50,7 +64,7 @@ func (d *Device) recvResponse() {
 			return
 		}
 		/* Tell the fd there's something new */
-		n, err = unix.Write(d.uioFd, buf)
+		n, err = d.uiof.Write(buf)
 		if n == -1 && err != nil {
 			zap.L().Error("poll write")
 			return
