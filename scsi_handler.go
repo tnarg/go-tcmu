@@ -9,7 +9,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/prometheus/common/log"
+	"go.uber.org/zap"
 
 	"github.com/tnarg/go-tcmu/scsi"
 )
@@ -70,7 +70,7 @@ func (c *SCSICmd) LBA() uint64 {
 	case 16:
 		return uint64(order.Uint64(c.cdb[2:10]))
 	default:
-		log.Errorf("What LBA has this length: %d", c.CdbLen())
+		zap.L().Sugar().Errorf("What LBA has this length: %d", c.CdbLen())
 		panic("unusal scsi command length")
 	}
 }
@@ -88,7 +88,7 @@ func (c *SCSICmd) XferLen() uint32 {
 	case 16:
 		return uint32(order.Uint32(c.cdb[10:14]))
 	default:
-		log.Errorf("What XferLen has this length: %d", c.CdbLen())
+		zap.L().Sugar().Errorf("What XferLen has this length: %d", c.CdbLen())
 		panic("unusal scsi command length")
 	}
 }
@@ -340,7 +340,7 @@ func SingleThreadedDevReady(h SCSICmdHandler) DevReadyFunc {
 				x, err := h.HandleCommand(v)
 				buf = v.Buf
 				if err != nil {
-					log.Error(err)
+					zap.L().Error("handling command", zap.Error(err))
 					return
 				}
 				out <- x
@@ -367,7 +367,7 @@ func MultiThreadedDevReady(h SCSICmdHandler, threads int) DevReadyFunc {
 						x, err := h.HandleCommand(v)
 						buf = v.Buf
 						if err != nil {
-							log.Error(err)
+							zap.L().Error("handling command", zap.Error(err))
 							return
 						}
 						out <- x

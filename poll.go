@@ -3,7 +3,7 @@ package tcmu
 import (
 	"fmt"
 
-	"github.com/prometheus/common/log"
+	"go.uber.org/zap"
 	"golang.org/x/sys/unix"
 
 	"github.com/tnarg/go-tcmu/scsi"
@@ -28,7 +28,7 @@ func (d *Device) beginPoll() {
 		for {
 			cmd, err := d.getNextCommand()
 			if err != nil {
-				log.Errorf("error getting next command: %s", err)
+				zap.L().Error("error getting next command", zap.Error(err))
 				break
 			}
 			if cmd == nil {
@@ -46,13 +46,13 @@ func (d *Device) recvResponse() {
 	for resp := range d.respChan {
 		err := d.completeCommand(resp)
 		if err != nil {
-			log.Errorf("error completing command: %s", err)
+			zap.L().Error("error completing command", zap.Error(err))
 			return
 		}
 		/* Tell the fd there's something new */
 		n, err = unix.Write(d.uioFd, buf)
 		if n == -1 && err != nil {
-			log.Errorln("poll write")
+			zap.L().Error("poll write")
 			return
 		}
 	}

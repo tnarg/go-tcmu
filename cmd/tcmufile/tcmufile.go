@@ -5,13 +5,18 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 
 	"github.com/tnarg/go-tcmu"
 )
 
 func main() {
-	logrus.SetLevel(logrus.DebugLevel)
+	logger := zap.NewExample()
+	defer logger.Sync()
+
+	undo := zap.ReplaceGlobals(logger)
+	defer undo()
+
 	if len(os.Args) != 2 {
 		die("not enough arguments")
 	}
@@ -46,6 +51,5 @@ func main() {
 }
 
 func die(why string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, why+"\n", args...)
-	os.Exit(1)
+	zap.L().Sugar().Fatalf(why+"\n", args...)
 }

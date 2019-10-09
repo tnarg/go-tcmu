@@ -13,10 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"go.uber.org/zap"
 	"golang.org/x/sys/unix"
-
-	"github.com/prometheus/common/log"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -123,12 +121,12 @@ func (d *Device) postEnableTcmu() error {
 	}
 
 	lunPath := d.getLunPath(prefix)
-	logrus.Debugf("Creating directory: %s", lunPath)
+	zap.L().Sugar().Debugf("Creating directory: %s", lunPath)
 	if err := os.MkdirAll(lunPath, 0755); err != nil && !os.IsExist(err) {
 		return err
 	}
 
-	logrus.Debugf("Linking: %s => %s", path.Join(lunPath, d.scsi.VolumeName), path.Join(d.hbaDir, d.scsi.VolumeName))
+	zap.L().Sugar().Debugf("Linking: %s => %s", path.Join(lunPath, d.scsi.VolumeName), path.Join(d.hbaDir, d.scsi.VolumeName))
 	if err := os.Symlink(path.Join(d.hbaDir, d.scsi.VolumeName), path.Join(lunPath, d.scsi.VolumeName)); err != nil {
 		return err
 	}
@@ -163,7 +161,7 @@ func (d *Device) createDevEntry() error {
 			break
 		}
 
-		logrus.Debugf("Waiting for %s", path)
+		zap.L().Sugar().Debugf("Waiting for %s", path)
 		time.Sleep(1 * time.Second)
 	}
 
@@ -198,7 +196,7 @@ func (d *Device) createDevEntry() error {
 		return err
 	}
 
-	logrus.Debugf("Creating device %s %d:%d", dev, major, minor)
+	zap.L().Sugar().Debugf("Creating device %s %d:%d", dev, major, minor)
 	return mknod(dev, major, minor)
 }
 
@@ -213,7 +211,7 @@ func mknod(device string, major, minor int) error {
 func writeLines(target string, lines []string) error {
 	dir := path.Dir(target)
 	if stat, err := os.Stat(dir); os.IsNotExist(err) {
-		logrus.Debugf("Creating directory: %s", dir)
+		zap.L().Sugar().Debugf("Creating directory: %s", dir)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return err
 		}
@@ -223,9 +221,9 @@ func writeLines(target string, lines []string) error {
 
 	for _, line := range lines {
 		content := []byte(line + "\n")
-		logrus.Debugf("Setting %s: %s", target, line)
+		zap.L().Sugar().Debugf("Setting %s: %s", target, line)
 		if err := ioutil.WriteFile(target, content, 0755); err != nil {
-			logrus.Errorf("Failed to write %s to %s: %v", line, target, err)
+			zap.L().Sugar().Errorf("Failed to write %s to %s: %v", line, target, err)
 			return err
 		}
 	}
@@ -264,12 +262,12 @@ func (d *Device) findDevice() error {
 		split := strings.SplitN(strings.TrimRight(string(bytes), "\n"), "/", 4)
 		if split[0] != "tcm-user" {
 			// Not a TCM device
-			log.Debugf("%s is not a tcm-user device", i.Name())
+			zap.L().Sugar().Debugf("%s is not a tcm-user device", i.Name())
 			return nil
 		}
 		if split[3] != d.GetDevConfig() {
 			// Not a TCM device
-			log.Debugf("%s is not our tcm-user device", i.Name())
+			zap.L().Sugar().Debugf("%s is not our tcm-user device", i.Name())
 			return nil
 		}
 		err = d.openDevice(split[1], split[2], i.Name())
@@ -307,13 +305,13 @@ func (d *Device) openDevice(user string, vol string, uio string) error {
 }
 
 func (d *Device) debugPrintMb() {
-	log.Debugf("Got a TCMU mailbox, version: %d\n", d.mbVersion())
-	log.Debugf("mapsize: %d\n", d.mapsize)
-	log.Debugf("mbFlags: %d\n", d.mbFlags())
-	log.Debugf("mbCmdrOffset: %d\n", d.mbCmdrOffset())
-	log.Debugf("mbCmdrSize: %d\n", d.mbCmdrSize())
-	log.Debugf("mbCmdHead: %d\n", d.mbCmdHead())
-	log.Debugf("mbCmdTail: %d\n", d.mbCmdTail())
+	zap.L().Sugar().Debugf("Got a TCMU mailbox, version: %d\n", d.mbVersion())
+	zap.L().Sugar().Debugf("mapsize: %d\n", d.mapsize)
+	zap.L().Sugar().Debugf("mbFlags: %d\n", d.mbFlags())
+	zap.L().Sugar().Debugf("mbCmdrOffset: %d\n", d.mbCmdrOffset())
+	zap.L().Sugar().Debugf("mbCmdrSize: %d\n", d.mbCmdrSize())
+	zap.L().Sugar().Debugf("mbCmdHead: %d\n", d.mbCmdHead())
+	zap.L().Sugar().Debugf("mbCmdTail: %d\n", d.mbCmdTail())
 }
 
 func (d *Device) teardown() error {
@@ -356,12 +354,12 @@ func (d *Device) teardown() error {
 }
 
 func removeAsync(path string, done chan<- error) {
-	logrus.Debugf("Removing: %s", path)
+	zap.L().Sugar().Debugf("Removing: %s", path)
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		logrus.Errorf("Unable to remove: %v", path)
+		zap.L().Sugar().Errorf("Unable to remove: %v", path)
 		done <- err
 	}
-	logrus.Debugf("Removed: %s", path)
+	zap.L().Sugar().Debugf("Removed: %s", path)
 	done <- nil
 }
 
