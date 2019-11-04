@@ -82,8 +82,25 @@ func OpenTCMUDevice(devPath string, scsi *SCSIHandler) (*Device, error) {
 		pollers:  &sync.WaitGroup{},
 		hbaDir:   fmt.Sprintf(configDirFmt, scsi.HBA),
 	}
-	err := d.Close()
+
+	_, err := os.Lstat(devPath)
 	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+	} else {
+		// cleanup previous state
+		if err := d.cleanup(); err != nil {
+			return nil, err
+		}
+		zap.L().Info("go-tcmu: device recovered", zap.String("dev", devPath))
+		if err := d.start(); err != nil {
+			return nil, err
+		}
+		return d, nil
+	}
+
+	if err := d.Close(); err != nil {
 		return nil, err
 	}
 	if err := d.preEnableTcmu(); err != nil {
@@ -400,4 +417,74 @@ func remove(path string) error {
 	case <-time.After(30 * time.Second):
 		return fmt.Errorf("Timeout trying to delete %s.", path)
 	}
+}
+
+func (d *Device) cleanup() error {
+	if !d.recoverySupported() {
+		return fmt.Errorf("go-tcmu: kernel does not support recovery")
+	}
+	if err := d.block(); err != nil {
+		return err
+	}
+	if err := d.resetRing(); err != nil {
+		return err
+	}
+	if err := d.unblock(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (d *Device) recoverySupported() bool {
+	devActionDir := d.getActionAttrDir()
+
+	// check required recovery attributes are supported by kernel
+	if stat, err := os.Stat(devActionDir); err != nil {
+		zap.L().Sugar().Debugf("go-tcmu: dir %s not found\n", devActionDir)
+		return false
+	} else if !stat.IsDir() {
+		zap.L().Sugar().Debugf("go-tcmu: %s is not a directory\n", devActionDir)
+		return false
+	}
+
+	attr := path.Join(devActionDir, "block_dev")
+	if _, err := os.Stat(attr); err != nil {
+		zap.L().Sugar().Debugf("go-tcmu: attr %s not found\n", attr)
+		return false
+	}
+
+	attr = path.Join(devActionDir, "reset_ring")
+	if _, err := os.Stat(attr); err != nil {
+		zap.L().Sugar().Debugf("go-tcmu: attr %s not found\n", attr)
+		return false
+	}
+	return true
+}
+
+func (d *Device) getActionAttrDir() string {
+	hbaDir := fmt.Sprintf(configDirFmt, d.scsi.HBA)
+	return fmt.Sprintf("%s/%s/%s", hbaDir, d.scsi.VolumeName, "attrib")
+}
+
+func (d *Device) block() error {
+	if err := writeLines(path.Join(d.getActionAttrDir(), "block_dev"), []string{
+		"1"}); err != nil {
+		return fmt.Errorf("go-tcmu: failed to block device %s", d.scsi.VolumeName)
+	}
+	return nil
+}
+
+func (d *Device) resetRing() error {
+	if err := writeLines(path.Join(d.getActionAttrDir(), "reset_ring"), []string{
+		"1"}); err != nil {
+		return fmt.Errorf("go-tcmu: failed to reset ring %s", d.scsi.VolumeName)
+	}
+	return nil
+}
+
+func (d *Device) unblock() error {
+	if err := writeLines(path.Join(d.getActionAttrDir(), "block_dev"), []string{"0"}); err != nil {
+		return fmt.Errorf("go-tcmu: err %v failed to unblock device %s", err, d.scsi.VolumeName)
+	}
+	return nil
 }
