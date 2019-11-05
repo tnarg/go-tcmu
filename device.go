@@ -83,7 +83,8 @@ func OpenTCMUDevice(devPath string, scsi *SCSIHandler) (*Device, error) {
 		hbaDir:   fmt.Sprintf(configDirFmt, scsi.HBA),
 	}
 
-	_, err := os.Lstat(devPath)
+	dev := filepath.Join(d.devPath, d.scsi.VolumeName)
+	_, err := os.Lstat(dev)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return nil, err
@@ -93,7 +94,7 @@ func OpenTCMUDevice(devPath string, scsi *SCSIHandler) (*Device, error) {
 		if err := d.cleanup(); err != nil {
 			return nil, err
 		}
-		zap.L().Info("go-tcmu: device recovered", zap.String("dev", devPath))
+		zap.L().Info("go-tcmu: device recovered", zap.String("dev", dev))
 		if err := d.start(); err != nil {
 			return nil, err
 		}
